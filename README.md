@@ -7,7 +7,7 @@
 **A free teleprompter + camera recorder that sits right under your lens.**
 Read your script, look at the camera, record in the best quality your device can do. Nothing to install, no account, no uploads.
 
-### [▶ Open the app — prompter-cam-psi.vercel.app](https://prompter-cam-psi.vercel.app)
+### [▶ Open the app — teleprompter-for-all.vercel.app](https://teleprompter-for-all.vercel.app)
 
 Works on Windows · Mac · iPhone · Android · any modern browser
 
@@ -33,7 +33,7 @@ Most teleprompter apps are paid, bloated, or put the text in the middle of the s
 
 ## Use it
 
-1. Open **[prompter-cam-psi.vercel.app](https://prompter-cam-psi.vercel.app)** and allow camera + microphone.
+1. Open **[teleprompter-for-all.vercel.app](https://teleprompter-for-all.vercel.app)** and allow camera + microphone.
 2. Tap **⚙**, paste your script, set font size and speed.
 3. Hit the red **record** button. After a 3-second countdown the text starts scrolling.
 4. Hit it again to stop, watch your take, then **Save**.
