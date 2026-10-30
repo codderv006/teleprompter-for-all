@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#000000">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Prompter">
+<title>Prompter</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<style>
+:root{
+  --bg:#000;--fg:#fff;--muted:rgba(255,255,255,.55);--line:rgba(255,255,255,.14);
+  --glass:rgba(0,0,0,.72);--rec:#ff3b30;--r:18px;
+  --st:env(safe-area-inset-top,0px);--sb:env(safe-area-inset-bottom,0px);
+  --sl:env(safe-area-inset-left,0px);--sr:env(safe-area-inset-right,0px);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;background:var(--bg);color:var(--fg);overflow:hidden;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+#preview{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;background:#000}
+#preview.mirror{transform:scaleX(-1)}
+#probe{position:fixed;visibility:hidden;pointer-events:none;
+  padding:var(--st) var(--sr) var(--sb) var(--sl)}
+
+/* Prompter card */
+#card{position:fixed;left:0;top:0;background:#000;border:1px solid var(--line);
+  border-radius:var(--r);overflow:hidden;display:flex;flex-direction:column;
+  box-shadow:0 10px 40px rgba(0,0,0,.5);z-index:5;touch-action:none}
+#grip{height:18px;flex:none;display:flex;align-items:center;justify-content:center;cursor:grab}
+#grip::before{content:"";width:38px;height:4px;border-radius:2px;background:var(--line)}
+#grip:active{cursor:grabbing}
+#scroller{position:relative;flex:1;overflow:hidden;
+  -webkit-mask-image:linear-gradient(transparent 0,#000 12%,#000 82%,transparent 100%);
+          mask-image:linear-gradient(transparent 0,#000 12%,#000 82%,transparent 100%)}
+#text{padding:4% 6% 0;white-space:pre-wrap;word-wrap:break-word;line-height:1.35;
+  font-weight:600;letter-spacing:.005em;will-change:transform;text-align:center}
+#text .end{height:100vh}
+#count{position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+  font-size:72px;font-weight:700;background:#000}
+#cbar{flex:none;display:flex;align-items:center;justify-content:center;gap:4px;padding:4px 6px 6px}
+.ib{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;color:var(--muted);transition:color .15s,background .15s}
+.ib:hover,.ib:focus-visible{color:var(--fg);background:rgba(255,255,255,.08);outline:none}
+.ib.on{color:var(--fg)}
+
+/* Bottom bar */
+#bar{position:fixed;left:0;right:0;bottom:0;z-index:4;display:flex;align-items:center;justify-content:center;
+  gap:28px;padding:16px 16px calc(20px + var(--sb))}
+#recBtn{width:72px;height:72px;border-radius:50%;border:4px solid #fff;display:grid;place-items:center;
+  background:rgba(0,0,0,.25)}
+#recBtn i{display:block;width:54px;height:54px;border-radius:50%;background:var(--rec);transition:all .2s}
+#recBtn.rec i{width:28px;height:28px;border-radius:6px}
+.side{width:44px;height:44px;border-radius:50%;background:var(--glass);display:grid;place-items:center;color:#fff}
+.side.hide{visibility:hidden}
+#timer{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(104px + var(--sb));z-index:4;
+  font-variant-numeric:tabular-nums;font-size:13px;padding:4px 10px;border-radius:12px;background:var(--glass);display:none}
+#timer.on{display:block}
+#timer::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--rec);margin-right:6px;vertical-align:1px}
+
+/* Panels */
+.sheet{position:fixed;left:50%;bottom:calc(12px + var(--sb));transform:translate(-50%,calc(100% + 40px));
+  width:min(560px,calc(100% - 32px));max-height:calc(100% - 120px);overflow:auto;z-index:10;
+  background:rgba(12,12,12,.94);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);
+  border:1px solid var(--line);border-radius:var(--r);padding:16px;transition:transform .25s ease}
+.sheet.open{transform:translate(-50%,0)}
+.sheet h2{font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;
+  display:flex;justify-content:space-between;align-items:center}
+textarea{width:100%;height:28vh;min-height:120px;resize:vertical;background:#000;color:#fff;border:1px solid var(--line);
+  border-radius:12px;padding:12px;font:inherit;font-size:16px;line-height:1.45;outline:none}
+textarea:focus{border-color:rgba(255,255,255,.4)}
+.row{display:flex;align-items:center;gap:12px;margin-top:14px;font-size:14px}
+.row label{width:84px;color:var(--muted);flex:none}
+.row output{width:36px;text-align:right;font-variant-numeric:tabular-nums;flex:none}
+input[type=range]{flex:1;accent-color:#fff;height:28px}
+select{flex:1;min-width:0;background:#000;color:#fff;border:1px solid var(--line);border-radius:10px;padding:8px;font:inherit;font-size:14px}
+.meta{margin-top:14px;font-size:12px;color:var(--muted);line-height:1.5}
+.btn{padding:11px 18px;border-radius:12px;background:#fff;color:#000;font-weight:600;font-size:15px}
+.btn.ghost{background:rgba(255,255,255,.1);color:#fff}
+.btns{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+.btns .btn{flex:1}
+#review video{width:100%;max-height:45vh;border-radius:12px;background:#000;display:block}
+
+#msg{position:fixed;inset:0;z-index:20;display:none;align-items:center;justify-content:center;flex-direction:column;
+  gap:16px;padding:24px;text-align:center;background:#000;color:var(--muted);font-size:15px;line-height:1.5}
+#msg.on{display:flex}
+#toast{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:30;background:var(--glass);
+  padding:10px 16px;border-radius:12px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none}
+#toast.on{opacity:1}
+</style>
+</head>
+<body>
+<video id="preview" autoplay muted playsinline></video>
+<div id="probe"></div>
+
+<div id="card">
+  <div id="grip" title="Drag to move · double-click to reset"></div>
+  <div id="scroller">
+    <div id="text"></div>
+    <div id="count"></div>
+  </div>
+  <div id="cbar">
+    <button class="ib" id="restartBtn" title="Restart (R)" aria-label="Restart">
+      <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button>
+    <button class="ib on" id="playBtn" title="Play / pause (Space)" aria-label="Play">
+      <svg viewBox="0 0 24 24" id="playIco"><path d="M7 4l13 8-13 8z" fill="currentColor"/></svg></button>
+    <button class="ib" id="fsBtn" title="Full screen (F)" aria-label="Full screen" style="display:none">
+      <svg viewBox="0 0 24 24" id="fsIco"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+    <button class="ib" id="setBtn" title="Settings" aria-label="Settings">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+  </div>
+</div>
+
+<div id="timer">00:00</div>
+<div id="bar">
+  <span class="side hide"></span>
+  <button id="recBtn" aria-label="Record"><i></i></button>
+  <button class="side hide" id="flipBtn" aria-label="Switch camera" title="Switch camera">
+    <svg viewBox="0 0 24 24"><path d="M20 7h-3l-2-3H9L7 7H4a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1z"/><path d="M9 13a3 3 0 0 1 5.2-2M15 13a3 3 0 0 1-5.2 2"/><path d="M14 9v2h2M10 17v-2H8"/></svg></button>
+</div>
+
+<section class="sheet" id="settings" aria-label="Settings">
+  <h2>Script <button class="ib" id="closeSet" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></h2>
+  <textarea id="script" spellcheck="true" placeholder="Paste or type your script here…"></textarea>
+  <div class="row"><label for="font">Font size</label><input type="range" id="font" min="16" max="96" step="1"><output id="fontV"></output></div>
+  <div class="row"><label for="speed">Speed</label><input type="range" id="speed" min="1" max="20" step="1"><output id="speedV"></output></div>
+  <div class="row"><label for="size">Window</label><input type="range" id="size" min="18" max="70" step="1"><output id="sizeV"></output></div>
+  <div class="row"><label for="cam">Camera</label><select id="cam"></select></div>
+  <div class="row"><label for="mic">Microphone</label><select id="mic"></select></div>
+  <div class="meta" id="info"></div>
+</section>
+
+<section class="sheet" id="review" aria-label="Recording">
+  <h2>Your take <span id="revMeta" style="text-transform:none;letter-spacing:0"></span></h2>
+  <video id="revVid" controls playsinline></video>
+  <div class="btns">
+    <button class="btn" id="saveBtn">Save</button>
+    <button class="btn ghost" id="shareBtn" style="display:none">Save to Photos / Share</button>
+    <button class="btn ghost" id="discardBtn">Discard</button>
+  </div>
+</section>
+
+<div id="msg"><div id="msgText"></div><button class="btn" id="retryBtn">Enable camera</button></div>
+<div id="toast"></div>
+
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const preview=$('preview'), card=$('card'), scroller=$('scroller'), textEl=$('text'), countEl=$('count');
+const coarse = matchMedia('(pointer:coarse)').matches;
+
+// ---------- settings ----------
+const DEF = {script:"Welcome! Paste your script in settings (the gear icon).\n\nLook right here — the text sits next to your camera, so your eyes stay on the lens.\n\nSet the font size and speed, hit record, and the script starts rolling after a 3-second countdown.\n\nPress Space to play or pause, R to restart, and drag the bar at the top of this card to move it.",
+  font:coarse?28:36, speed:6, size:coarse?30:32, cam:'', mic:'', pos:{}};
+let S = DEF;
+try { S = Object.assign({}, DEF, JSON.parse(localStorage.getItem('prompter') || '{}')); } catch {}
+const save = () => { try { localStorage.setItem('prompter', JSON.stringify(S)); } catch {} };
+
+// ---------- prompter ----------
+let y = 0, playing = false, last = performance.now();
+function renderText(){
+  textEl.textContent = S.script;
+  const end = document.createElement('div'); end.className = 'end'; textEl.appendChild(end);
+  textEl.style.fontSize = S.font + 'px';
+}
+const maxY = () => Math.max(0, textEl.offsetHeight - window.innerHeight - scroller.clientHeight * 0.35);
+const paint = () => { textEl.style.transform = `translate3d(0,${-y}px,0)`; };
+function setPlaying(p){
+  playing = p;
+  $('playIco').innerHTML = p ? '<path d="M8 5v14M16 5v14"/>' : '<path d="M7 4l13 8-13 8z" fill="currentColor"/>';
+  $('playBtn').setAttribute('aria-label', p ? 'Pause' : 'Play');
+}
+function restart(){ y = 0; paint(); }
+function tick(t){
+  const dt = Math.min(0.1, (t - last) / 1000); last = t;
+  if (playing){
+    y += S.speed * S.font * 0.11 * dt;     // speed scales with font so lines/sec stay consistent (6 ≈ half a line/sec)
+    const m = maxY(); if (y >= m){ y = m; setPlaying(false); }
+    paint();
+  }
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+
+// manual scrolling (wheel + touch drag on the text)
+scroller.addEventListener('wheel', e => { e.preventDefault(); y = Math.min(maxY(), Math.max(0, y + e.deltaY)); paint(); }, {passive:false});
+let ty = null, moved = false;
+scroller.addEventListener('pointerdown', e => { ty = e.clientY; moved = false; scroller.setPointerCapture(e.pointerId); });
+scroller.addEventListener('pointermove', e => { if (ty === null) return; const d = ty - e.clientY;
+  if (Math.abs(d) > 2) moved = true; ty = e.clientY; y = Math.min(maxY(), Math.max(0, y + d)); paint(); });
+scroller.addEventListener('pointerup', () => { if (!moved && !counting) setPlaying(!playing); ty = null; });
+scroller.addEventListener('pointercancel', () => { ty = null; });
+
+$('playBtn').onclick = () => setPlaying(!playing);
+$('restartBtn').onclick = restart;
+
+// ---------- card placement (sits at the camera) ----------
+const safe = () => { const c = getComputedStyle($('probe'));
+  return {t:parseFloat(c.paddingTop)||0, r:parseFloat(c.paddingRight)||0, b:parseFloat(c.paddingBottom)||0, l:parseFloat(c.paddingLeft)||0}; };
+const orientKey = () => innerWidth > innerHeight ? 'l' : 'p';
+function cameraSide(){
+  // Phones held landscape: front camera is on the left or right edge.
+  if (!(coarse && innerWidth > innerHeight)) return 'top';
+  let a = (typeof window.orientation === 'number') ? window.orientation : (screen.orientation ? screen.orientation.angle : 90);
+  return (a === -90 || a === 270) ? 'right' : 'left';
+}
+let box = {x:0, y:0, w:0, h:0};
+function placeCard(){
+  const s = safe(), W = innerWidth, H = innerHeight, side = cameraSide();
+  let w, h, x, yy;
+  if (side === 'top'){
+    w = Math.min(W - 24 - s.l - s.r, 680);
+    h = Math.max(140, H * S.size / 100);
+    x = (W - w) / 2; yy = Math.max(8, s.t + 4);
+  } else {
+    w = Math.min(W * Math.max(.3, S.size / 70 * .6), 620);
+    h = H - Math.max(8, s.t) - 120 - s.b;
+    yy = Math.max(8, s.t);
+    x = side === 'left' ? Math.max(8, s.l) : W - w - Math.max(8, s.r);
+  }
+  const p = S.pos[orientKey()];
+  if (p){ x = p.x * W; yy = p.y * H; }
+  x = Math.min(Math.max(0, x), W - w); yy = Math.min(Math.max(0, yy), H - Math.min(h, H));
+  box = {x, y:yy, w, h};
+  Object.assign(card.style, {left:x+'px', top:yy+'px', width:w+'px', height:h+'px'});
+}
+// drag by the grip
+let drag = null;
+$('grip').addEventListener('pointerdown', e => { drag = {sx:e.clientX, sy:e.clientY, x:box.x, y:box.y}; $('grip').setPointerCapture(e.pointerId); });
+$('grip').addEventListener('pointermove', e => { if (!drag) return;
+  const x = Math.min(Math.max(0, drag.x + e.clientX - drag.sx), innerWidth - box.w);
+  const yy = Math.min(Math.max(0, drag.y + e.clientY - drag.sy), innerHeight - 60);
+  box.x = x; box.y = yy; card.style.left = x + 'px'; card.style.top = yy + 'px'; });
+$('grip').addEventListener('pointerup', () => { if (!drag) return; drag = null;
+  S.pos[orientKey()] = {x: box.x / innerWidth, y: box.y / innerHeight}; save(); });
+$('grip').addEventListener('dblclick', () => { delete S.pos[orientKey()]; save(); placeCard(); });
+addEventListener('resize', placeCard);
+addEventListener('orientationchange', () => setTimeout(placeCard, 250));
+
+// ---------- settings panel ----------
+const setSheet = $('settings');
+const toggleSettings = open => { setSheet.classList.toggle('open', open ?? !setSheet.classList.contains('open')); $('setBtn').classList.toggle('on', setSheet.classList.contains('open')); };
+$('setBtn').onclick = () => toggleSettings();
+$('closeSet').onclick = () => toggleSettings(false);
+const script = $('script'); script.value = S.script;
+script.oninput = () => { S.script = script.value; save(); renderText(); y = Math.min(y, maxY()); paint(); };
+function bindRange(id, key, fmt, after){
+  const el = $(id), out = $(id + 'V');
+  el.value = S[key]; out.textContent = fmt(S[key]);
+  el.oninput = () => { S[key] = +el.value; out.textContent = fmt(S[key]); save(); after && after(); };
+}
+bindRange('font', 'font', v => v, () => { textEl.style.fontSize = S.font + 'px'; });
+bindRange('speed', 'speed', v => v, null);
+bindRange('size', 'size', v => v + '%', placeCard);
+
+// ---------- camera ----------
+let stream = null, facing = 'user', recorder = null, chunks = [], mime = '', recStart = 0, timerInt = 0, counting = false, lastBlob = null;
+const AUDIO = {echoCancellation:false, noiseSuppression:false, autoGainControl:true, sampleRate:{ideal:48000}, channelCount:{ideal:2}};
+async function startCamera(){
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  const v = {width:{ideal:3840}, height:{ideal:2160}, frameRate:{ideal:30}};
+  if (S.cam) v.deviceId = {exact:S.cam}; else v.facingMode = facing;
+  const au = Object.assign({}, AUDIO); if (S.mic) au.deviceId = {exact:S.mic};
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({video:v, audio:au});
+  } catch (e){
+    if ((S.cam || S.mic) && (e.name === 'OverconstrainedError' || e.name === 'NotFoundError')){ S.cam = ''; S.mic = ''; save(); return startCamera(); }
+    showMsg(e.name === 'NotAllowedError'
+      ? 'Camera and microphone access was blocked. Allow access in your browser settings, then try again.'
+      : 'Could not start the camera (' + (e.message || e.name) + ').');
+    return;
+  }
+  $('msg').classList.remove('on');
+  preview.srcObject = stream;
+  try { await preview.play(); } catch {}
+  const vt = stream.getVideoTracks()[0], st = vt.getSettings();
+  preview.classList.toggle('mirror', st.facingMode !== 'environment');
+  const a = stream.getAudioTracks()[0], as = a ? a.getSettings() : {};
+  $('info').textContent = `Camera: ${vt.label || 'default'} — ${st.width}×${st.height} @ ${Math.round(st.frameRate || 30)}fps` +
+    (a ? ` · Mic: ${a.label || 'default'}${as.sampleRate ? ' ' + Math.round(as.sampleRate/1000) + 'kHz' : ''}` : ' · no mic') +
+    ` · Format: ${pickMime().split(';')[0] || 'browser default'}`;
+  listDevices(st.deviceId, as.deviceId);
+}
+async function listDevices(curCam, curMic){
+  const all = await navigator.mediaDevices.enumerateDevices();
+  const fill = (sel, kind, name, current) => {
+    const devs = all.filter(d => d.kind === kind && d.deviceId !== 'communications');
+    sel.innerHTML = '';
+    devs.forEach((d, i) => { const o = new Option(d.label || name + ' ' + (i + 1), d.deviceId); o.selected = d.deviceId === current; sel.add(o); });
+    return devs;
+  };
+  const cams = fill($('cam'), 'videoinput', 'Camera', curCam);
+  fill($('mic'), 'audioinput', 'Microphone', curMic);
+  $('flipBtn').classList.toggle('hide', cams.length < 2 || !coarse);
+}
+navigator.mediaDevices && navigator.mediaDevices.addEventListener &&
+  navigator.mediaDevices.addEventListener('devicechange', () => { if (stream){ const v = stream.getVideoTracks()[0], a = stream.getAudioTracks()[0];
+    listDevices(v && v.getSettings().deviceId, a && a.getSettings().deviceId); } });
+$('cam').onchange = e => { if (recorder) return toast('Stop recording first'); S.cam = e.target.value; save(); startCamera(); };
+$('mic').onchange = e => { if (recorder) return toast('Stop recording first'); S.mic = e.target.value; save(); startCamera(); };
+$('flipBtn').onclick = () => { if (recorder) return; facing = facing === 'user' ? 'environment' : 'user'; S.cam = ''; save(); startCamera(); };
+function showMsg(t){ $('msgText').textContent = t; $('msg').classList.add('on'); }
+$('retryBtn').onclick = startCamera;
+
+// ---------- recording ----------
+function pickMime(){
+  if (!window.MediaRecorder) return '';
+  const list = ['video/mp4;codecs=avc1.640033,mp4a.40.2','video/mp4;codecs=avc1,mp4a.40.2','video/mp4;codecs=avc1,opus','video/mp4',
+    'video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'];
+  return list.find(m => MediaRecorder.isTypeSupported(m)) || '';
+}
+function bitrate(){
+  const s = stream.getVideoTracks()[0].getSettings();
+  const px = (s.width || 1920) * (s.height || 1080) * (s.frameRate || 30);
+  return Math.round(Math.min(60e6, Math.max(8e6, px * 0.2)));   // ~12 Mbps for 1080p30, ~50 Mbps for 4K30
+}
+async function countdown(){
+  counting = true; countEl.style.display = 'flex';
+  for (let i = 3; i > 0; i--){ countEl.textContent = i; await new Promise(r => setTimeout(r, 800)); }
+  countEl.style.display = 'none'; counting = false;
+}
+async function startRec(){
+  if (!stream) return startCamera();
+  if (!window.MediaRecorder) return toast('Recording is not supported in this browser');
+  toggleSettings(false);
+  $('recBtn').classList.add('rec');
+  await countdown();
+  if (!$('recBtn').classList.contains('rec')) return;   // cancelled during countdown
+  mime = pickMime(); chunks = [];
+  const opts = {videoBitsPerSecond: bitrate(), audioBitsPerSecond: 256000};
+  if (mime) opts.mimeType = mime;
+  try { recorder = new MediaRecorder(stream, opts); }
+  catch { recorder = new MediaRecorder(stream); }
+  recorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+  recorder.onstop = finishRec;
+  recorder.start(1000);
+  recStart = Date.now(); $('timer').classList.add('on'); updTimer(); timerInt = setInterval(updTimer, 500);
+  restart(); setPlaying(true); lockWake();
+}
+function stopRec(){
+  $('recBtn').classList.remove('rec');
+  if (recorder && recorder.state !== 'inactive') recorder.stop();
+  setPlaying(false);
+}
+function updTimer(){ const s = Math.floor((Date.now() - recStart) / 1000);
+  $('timer').textContent = String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); }
+function finishRec(){
+  clearInterval(timerInt); $('timer').classList.remove('on');
+  const type = (recorder.mimeType || mime || 'video/webm').split(';')[0];
+  recorder = null;
+  lastBlob = new Blob(chunks, {type}); chunks = [];
+  const v = $('revVid'); if (v.src) URL.revokeObjectURL(v.src);
+  v.src = URL.createObjectURL(lastBlob);
+  $('revMeta').textContent = (lastBlob.size / 1048576).toFixed(1) + ' MB · ' + (type.includes('mp4') ? 'MP4' : 'WebM');
+  $('shareBtn').style.display = (coarse && navigator.canShare && navigator.canShare({files:[toFile()]})) ? '' : 'none';
+  $('review').classList.add('open');
+}
+function toFile(){
+  const d = new Date(), p = n => String(n).padStart(2, '0');
+  const name = `take-${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.${lastBlob.type.includes('mp4') ? 'mp4' : 'webm'}`;
+  return new File([lastBlob], name, {type: lastBlob.type});
+}
+$('recBtn').onclick = () => $('recBtn').classList.contains('rec') ? stopRec() : startRec();
+$('saveBtn').onclick = () => {
+  const f = toFile(), a = document.createElement('a');
+  a.href = URL.createObjectURL(f); a.download = f.name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 60000); toast('Saved ' + f.name);
+};
+$('shareBtn').onclick = async () => { try { await navigator.share({files:[toFile()]}); } catch {} };
+$('discardBtn').onclick = () => {
+  if (!confirm('Discard this take?')) return;
+  const v = $('revVid'); v.pause(); URL.revokeObjectURL(v.src); v.removeAttribute('src'); v.load();
+  lastBlob = null; $('review').classList.remove('open');
+};
+addEventListener('beforeunload', e => { if (recorder || lastBlob){ e.preventDefault(); e.returnValue = ''; } });
+
+// ---------- full screen ----------
+const root = document.documentElement;
+const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
+const fsReq = root.requestFullscreen || root.webkitRequestFullscreen;
+const fsExit = document.exitFullscreen || document.webkitExitFullscreen;
+function toggleFs(){
+  if (fsEl()) fsExit.call(document);
+  else { const p = fsReq.call(root, {navigationUI:'hide'}); if (p && p.catch) p.catch(() => toast('Full screen not available')); }
+}
+function fsChanged(){
+  const on = !!fsEl();
+  $('fsIco').innerHTML = on ? '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>' : '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>';
+  $('fsBtn').setAttribute('aria-label', on ? 'Exit full screen' : 'Full screen');
+  setTimeout(placeCard, 100);
+}
+if (fsReq && (document.fullscreenEnabled || document.webkitFullscreenEnabled)){
+  $('fsBtn').style.display = '';
+  $('fsBtn').onclick = toggleFs;
+  document.addEventListener('fullscreenchange', fsChanged);
+  document.addEventListener('webkitfullscreenchange', fsChanged);
+} else if (!navigator.standalone && !matchMedia('(display-mode: standalone)').matches){
+  // iPhone Safari has no full-screen API; the home-screen app opens full screen instead
+  const tip = document.createElement('div'); tip.className = 'meta';
+  tip.textContent = 'Full screen: tap Share → Add to Home Screen, then open Prompter from your home screen.';
+  setSheet.appendChild(tip);
+}
+
+// ---------- misc ----------
+let wake = null;
+async function lockWake(){ try { if ('wakeLock' in navigator && !wake){ wake = await navigator.wakeLock.request('screen'); wake.onrelease = () => wake = null; } } catch {} }
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') lockWake(); });
+let toastT = 0;
+function toast(t){ const el = $('toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('on'), 2200); }
+addEventListener('keydown', e => {
+  if (e.target.matches('textarea,input,select')) return;
+  if (e.code === 'Space'){ e.preventDefault(); setPlaying(!playing); }
+  else if (e.key === 'r' || e.key === 'R') restart();
+  else if ((e.key === 'f' || e.key === 'F') && $('fsBtn').style.display !== 'none') toggleFs();
+  else if (e.key === 'ArrowUp'){ S.speed = Math.min(20, S.speed + 1); $('speed').value = S.speed; $('speedV').textContent = S.speed; save(); toast('Speed ' + S.speed); }
+  else if (e.key === 'ArrowDown'){ S.speed = Math.max(1, S.speed - 1); $('speed').value = S.speed; $('speedV').textContent = S.speed; save(); toast('Speed ' + S.speed); }
+  else if (e.key === 'Escape') toggleSettings(false);
+});
+
+renderText(); placeCard(); paint(); lockWake();
+if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) showMsg('This browser cannot access the camera. Open the page over HTTPS in Chrome, Edge, Safari or Firefox.');
+else startCamera();
+})();
+</script>
+</body>
+</html>
